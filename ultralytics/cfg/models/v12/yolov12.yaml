@@ -13,12 +13,12 @@ scales: # model compound scaling constants, i.e. 'model=yolov12n.yaml' will call
   x: [1.00, 1.50, 512] # summary: 895 layers, 59,414,176 parameters, 59,414,160 gradients, 185.9 GFLOPs
 
 
-# YOLO12-turbo backbone with Dual-Branch as Initial Downsampling
+# YOLO12-turbo backbone with Dual-Branch (Sequential, GPU-optimized)
 backbone:
   # [from, repeats, module, args]
-  - [-1, 1, StandardBranch,     [64, 128]] # 0-StandardBranch (P1/2 -> P2/4, from input)
-  - [0, 1, DenoisingBranch,    [128]] # 1-Denoising path (P1/2 -> P2/4, from input at y[0]) 
-  - [[2, 1], 1, AdaptiveFeatureFusion, [128]] # 2-Fuse both branches (layer 1 at y[2], layer 0 at y[1])
+  - [-1, 1, StandardBranch,     [64, 128]] # 0-StandardBranch (P1/2 -> P2/4)
+  - [-1, 1, DenoisingBranch,    [128]] # 1-Denoising path (processes P2/4, 16x lighter)
+  - [[-1, -2], 1, AdaptiveFeatureFusion, [128]] # 2-Fuse denoised + standard features
   
   # ===== R-ELAN BLOCKS (standard, no attention) =====
   - [-1, 2, C3k2, [256, False, 0.25]] # 3-R-ELAN (P2)

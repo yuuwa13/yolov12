@@ -144,7 +144,7 @@ class BaseModel(nn.Module):
         Returns:
             (torch.Tensor): The last output of the model.
         """
-        y, dt, embeddings = [x], [], []  # outputs - prepend input for parallel branch access
+        y, dt, embeddings = [], [], []  # outputs
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
@@ -1066,14 +1066,14 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             c1 = ch[f]
             args = [c1, c2, *args[1:]]
         elif m is StandardBranch:
-            # StandardBranch needs c1 and c2
-            c1 = ch[f] if f >= 0 else ch[f]
-            c2 = args[0]
-            args = [c1, c2, *args[1:]]
+            # StandardBranch: args=[c2_intermediate, c3_output], output is c3
+            c1 = ch[f]
+            c2 = args[1] if len(args) > 1 else args[0]  # output channels
+            args = [c1, *args]
         elif m is DenoisingBranch:
-            # DenoisingBranch always takes 3-channel input (raw image)
-            c1 = 3
-            c2 = args[0]
+            # DenoisingBranch: args=[c2_output], takes input from previous layer
+            c1 = ch[f]
+            c2 = args[0]  # output channels
             args = [c1, c2, *args[1:]]
         elif m is AdaptiveFeatureFusion:
             # AdaptiveFeatureFusion fuses two channels from previous layers
