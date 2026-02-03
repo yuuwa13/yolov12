@@ -1397,9 +1397,10 @@ class StandardBranch(nn.Module):
 class DenoisingBranch(nn.Module):
     def __init__(self, c1, c2=None, n=1, shortcut=False, g=1, e=0.5):
         """
-        Denoising branch with depthwise separable convolutions and downsampling.
+        Denoising branch with depthwise separable convolutions (no downsampling).
+        Processes features at P2/4 resolution from StandardBranch output.
         Args:
-            c1: input channels (e.g., 3 for RGB)
+            c1: input channels (e.g., 128 from StandardBranch)
             c2: output channels (e.g., 128)
             e: expansion ratio (default 0.5)
         """
@@ -1407,15 +1408,14 @@ class DenoisingBranch(nn.Module):
         c2 = c2 or c1
         self.c = int(c2 * e)
         
-        # First conv with stride=2 for downsampling to P1/2
-        self.cv1 = Conv(c1, self.c, 3, 2, 1)
+        # First conv (stride=1, maintains resolution)
+        self.cv1 = Conv(c1, self.c, 3, 1, 1)
         
-        # First DW-PW block with stride=2 for additional downsampling to P2/4
-        # DWConv already has: Conv2d → BatchNorm2d → SiLU activation
-        self.dw_conv1 = DWConv(self.c, self.c, k=3, s=2)
+        # First DW-PW block (stride=1, maintains P2/4)
+        self.dw_conv1 = DWConv(self.c, self.c, k=3, s=1)
         self.pw_conv1 = Conv(self.c, self.c, 1, 1)
         
-        # Second DW-PW block with stride=1
+        # Second DW-PW block (stride=1, maintains P2/4)
         self.dw_conv2 = DWConv(self.c, self.c, k=3, s=1)
         self.pw_conv2 = Conv(self.c, self.c, 1, 1)
         
@@ -1426,18 +1426,17 @@ class DenoisingBranch(nn.Module):
         self.cv2 = Conv(self.c, c2, 1)
 
     def forward(self, x):
-        """Forward pass through denoising branch with downsampling (input → P1/2 → P2/4)."""
-        # Initial conv with downsampling to P1/2
-        x = self.cv1(x)  # 3 → 2*c channels, stride=2
+        """Forward pass through denoising branch (maintains P2/4 resolution)."""
+        # Initial conv (maintains resolution)
+        x = self.cv1(x)
         
-        # First DW-PW block: downsamples to P2/4
-        # Note: DWConv already applies BatchNorm and activation internally
-        x = self.dw_conv1(x)  # DWConv: Conv→BN→SiLU (stride=2)
-        x = self.pw_conv1(x)  # Conv: Conv→BN→SiLU
+        # First DW-PW block (maintains P2/4)
+        x = self.dw_conv1(x)
+        x = self.pw_conv1(x)
         
-        # Second DW-PW block: maintains P2/4
-        x = self.dw_conv2(x)  # DWConv: Conv→BN→SiLU (stride=1)
-        x = self.pw_conv2(x)  # Conv: Conv→BN→SiLU
+        # Second DW-PW block (maintains P2/4)
+        x = self.dw_conv2(x)
+        x = self.pw_conv2(x)
         
         # Final projection to output channels
         x = self.cv2(x)
